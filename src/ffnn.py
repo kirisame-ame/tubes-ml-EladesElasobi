@@ -120,15 +120,6 @@ class Linear(Layer):
         return dx
 
 
-class LinearActivation(Layer):
-    def forward(self, x: Tensor) -> Tensor:
-        self.input = x.data
-        return Tensor(x.data)
-
-    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
-        return grad * 1.0  
-
-
 class Relu(Layer):
     def forward(self, x):
         self.mask = (x.data > 0).astype(float)
