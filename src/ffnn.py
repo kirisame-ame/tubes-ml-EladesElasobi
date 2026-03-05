@@ -92,7 +92,7 @@ class Layer:
 
     def print_gradients(self):
         if hasattr(self, "grad"):
-            print(self.grad.data)
+            print(self.grad)
         # else print nothing
 
 
@@ -115,6 +115,7 @@ class Linear(Layer):
         dw = grad.T @ self.X.data
         db = np.sum(grad, axis=0)
         dx = grad @ self.weights.data
+        self.grad = dw
         self.weights.data -= lr * dw
         if self.bias is not None:
             self.bias.data -= lr * db
@@ -240,8 +241,16 @@ class Model:
     def show_weights(self, layer_idx: list[int]):
         # TODO
         for idx in layer_idx:
-            self.layers[idx].print_weights()
+            print(f"Layer {idx} Weights:")
+            try:
+                self.layers[idx].print_weights()
+            except IndexError:
+                print(f"Warning: Index {idx} out of range")
 
     def show_gradients(self, layer_idx: list[int]):
         for idx in layer_idx:
-            self.layers[idx].print_gradients()
+            print(f"Layer {idx} Gradients:")
+            try:
+                self.layers[idx].print_gradients()
+            except IndexError:
+                print(f"Index {idx} out of range")
