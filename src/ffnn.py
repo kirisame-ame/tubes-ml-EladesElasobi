@@ -21,13 +21,22 @@ class loss:
 
 
 class MSE(loss):
+    # def _to_one_hot(self, input, target):
+    #     if target.ndim == 1 or (target.ndim == 2 and target.shape[1] == 1):
+    #         one_hot = np.zeros((target.shape[0], input.shape[1]))
+    #         one_hot[np.arange(target.shape[0]), target.flatten().astype(int)] = 1
+    #         return one_hot
+    #     return target
+
     def get_loss(self, input, target):
-        # TODO
-        return super().get_loss(input, target)
+        pass
+        # target = self._to_one_hot(input, target)
+        # return np.mean((input - target) ** 2)
 
     def get_gradient(self, input, target):
-        # TODO
-        return super().get_gradient(input, target)
+        pass
+        # target = self._to_one_hot(input, target)
+        # return 2 * (input - target) / input.shape[0]
 
 
 class CrossEntropyLoss(loss):
@@ -90,27 +99,43 @@ class Linear(Layer):
     def __init__(self, in_features, out_features, bias=True):
         self.in_features = in_features
         self.out_features = out_features
-        self.weights = Tensor(np.empty(out_features, in_features))
+        self.weights = Tensor(np.empty((out_features, in_features)))
         self.bias = Tensor(np.empty(out_features)) if bias else None
         init.zeros(self.weights)
 
     def forward(self, x):
-        # TODO
-        return super().forward(x)
+        self.X = x
+        y = x.data @ self.weights.data.T
+        if self.bias is not None:
+            y = y + self.bias.data
+        return Tensor(y)
 
     def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+        dw = grad.T @ self.X.data
+        db = np.sum(grad, axis=0)
+        dx = grad @ self.weights.data
+        self.weights.data -= lr * dw
+        if self.bias is not None:
+            self.bias.data -= lr * db
+        return dx
+
+
+class LinearActivation(Layer):
+    def forward(self, x: Tensor) -> Tensor:
+        self.input = x.data
+        return Tensor(x.data)
+
+    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
+        return grad * 1.0  
 
 
 class Relu(Layer):
     def forward(self, x):
-        # TODO
-        return super().forward(x)
+        self.mask = (x.data > 0).astype(float)
+        return Tensor(x.data * self.mask)
 
     def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+        return grad * self.mask
 
 
 class Sigmoid(Layer):
