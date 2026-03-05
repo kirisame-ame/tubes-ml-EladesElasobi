@@ -95,13 +95,19 @@ class Relu(Layer):
 
 
 class Sigmoid(Layer):
-    def forward(self, x):
-        # TODO
-        return super().forward(x)
+    def forward(self, x: Tensor) -> Tensor:
+        
+        self.output = 1 / (1 + np.exp(-x))
 
-    def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+        return Tensor(self.output)
+
+    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
+        
+        sigmoid_deriv = self.output * (1 - self.output)
+
+        return_grad = grad * sigmoid_deriv
+
+        return return_grad
 
 
 class Tanh(Layer):
