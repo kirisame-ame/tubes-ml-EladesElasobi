@@ -41,14 +41,15 @@ class MSE(loss):
 
 class CrossEntropyLoss(loss):
     def get_loss(self, input, target):
-        y_pred = input[:, target]
+        N = input.shape[0]
+        y_pred = input[range(N), target]
         return np.mean(-np.log(y_pred + 1e-9))
 
     def get_gradient(self, input, target):
-        # TODO
+        N = input.shape[0]
         self.grad = input.copy()
-        self.grad[:, target] -= 1
-        self.grad /= input.shape[0]
+        self.grad[range(N), target] -= 1
+        self.grad /= N
         return self.grad
 
 
@@ -86,12 +87,12 @@ class Layer:
 
     def print_weights(self):
         if hasattr(self, "weights"):
-            print(self.weights)
+            print(self.weights.data)
         # else print nothing
 
     def print_gradients(self):
         if hasattr(self, "grad"):
-            print(self.grad)
+            print(self.grad.data)
         # else print nothing
 
 
@@ -207,6 +208,8 @@ class Model:
     def fit(
         self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, verbose=1, seed=7
     ):
+        X = np.array(X)
+        y = np.array(y)
         n_samples = X.shape[0]
         rng = np.random.default_rng(seed=seed)
         for epoch in range(epochs):
@@ -236,9 +239,9 @@ class Model:
 
     def show_weights(self, layer_idx: list[int]):
         # TODO
-        for layer in self.layers[layer_idx]:
-            layer.print_weights()
+        for idx in layer_idx:
+            self.layers[idx].print_weights()
 
     def show_gradients(self, layer_idx: list[int]):
-        for layer in self.layers[layer_idx]:
-            layer.print_gradients()
+        for idx in layer_idx:
+            self.layers[idx].print_gradients()

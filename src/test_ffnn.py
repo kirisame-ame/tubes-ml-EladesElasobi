@@ -22,7 +22,7 @@ model = ffnn.Model(
     layers=[ffnn.Linear(4, 4), ffnn.Relu(), ffnn.Linear(4, 3), ffnn.Softmax()],
     loss=ffnn.CrossEntropyLoss(),
 )
-model.fit(X_train_transformed, y_train, epochs=1000, lr=1)
+model.fit(X_train_transformed, y_train, epochs=20, lr=1)
 preds = model.predict(X_test_transformed)
 
 print(accuracy_score(y_test, preds))
@@ -30,3 +30,4 @@ print("actual:")
 print(np.ravel(y_test))
 print("preds:")
 print(preds)
+model.show_weights([0, 2])
