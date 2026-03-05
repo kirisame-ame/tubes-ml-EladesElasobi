@@ -4,9 +4,6 @@ import numpy as np
 import math
 
 
-rng = np.random.default_rng()
-
-
 class Tensor:
     def __init__(self, data):
         self.data = np.array(data)
@@ -35,12 +32,15 @@ class MSE(loss):
 
 class CrossEntropyLoss(loss):
     def get_loss(self, input, target):
-        # TODO
-        return super().get_loss(input, target)
+        y_pred = input[:, target]
+        return np.mean(-np.log(y_pred + 1e-9))
 
     def get_gradient(self, input, target):
         # TODO
-        return super().get_gradient(input, target)
+        self.grad = input.copy()
+        self.grad[:, target] -= 1
+        self.grad /= input.shape[0]
+        return self.grad
 
 
 class init:
@@ -50,12 +50,21 @@ class init:
 
     @staticmethod
     def uniform(tensor: Tensor, lower_bound, upper_bound, seed):
+        rng = np.random.default_rng(seed=seed)
+        tensor.data[:] = rng.uniform(lower_bound, upper_bound, tensor.dim())
+
+    @staticmethod
+    def normal(tensor: Tensor, mean, variance, seed):
+        rng = np.random.default_rng(seed=seed)
+        tensor.data[:] = rng.normal(mean, variance**0.5, tensor.dim())
+
+    @staticmethod
+    def kaiming_uniform(tensor: Tensor):
         # TODO
         pass
 
     @staticmethod
-    def normal(tensor: Tensor, mean, variance, seed):
-        # TODO
+    def xavier_uniform(tensor: Tensor):
         pass
 
 
@@ -65,6 +74,16 @@ class Layer:
 
     def backward(self, grad, lr):
         raise NotImplementedError
+
+    def print_weights(self):
+        if hasattr(self, "weights"):
+            print(self.weights)
+        # else print nothing
+
+    def print_gradients(self):
+        if hasattr(self, "grad"):
+            print(self.grad)
+        # else print nothing
 
 
 class Linear(Layer):
@@ -138,9 +157,9 @@ class Model:
         for layer in reversed(self.layers):
             grad = layer.backward(grad, lr)
 
-    def fit(self, X, y, epochs=10, batch_size=32, lr=0.01, verbose=1):
+    def fit(self, X, y, epochs=10, batch_size=32, lr=0.01, verbose=1, seed=7):
         n_samples = X.shape[0]
-
+        rng = np.random.default_rng(seed=seed)
         for epoch in range(epochs):
             indices = np.arange(n_samples)
             rng.shuffle(indices)
@@ -168,8 +187,9 @@ class Model:
 
     def show_weights(self, layer_idx: list[int]):
         # TODO
-        pass
+        for layer in self.layers:
+            layer.print_weights()
 
     def show_gradients(self, layer_idx: list[int]):
-        # TODO
-        pass
+        for layer in self.layers:
+            layer.print_gradients()
