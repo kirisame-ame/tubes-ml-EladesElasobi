@@ -114,33 +114,64 @@ class Relu(Layer):
 
 
 class Sigmoid(Layer):
-    def forward(self, x):
-        # TODO
-        return super().forward(x)
+    def forward(self, x: Tensor) -> Tensor:
+        
+        self.output = 1 / (1 + np.exp(-x))
 
-    def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+        return Tensor(self.output)
+
+    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
+        
+        sigmoid_deriv = self.output * (1 - self.output)
+
+        return_grad = grad * sigmoid_deriv
+
+        return return_grad
 
 
 class Tanh(Layer):
-    def forward(self, x):
-        # TODO
-        return super().forward(x)
 
-    def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+    def forward(self, x: Tensor) -> Tensor:
+
+        self.output = np.tanh(x.data)
+        return Tensor(self.output)
+
+    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
+        
+        tanh_deriv = 1.0 - (self.output**2)
+        return_grad = grad * tanh_deriv
+        
+        return return_grad
 
 
 class Softmax(Layer):
-    def forward(self, x):
-        # TODO
-        return super().forward(x)
+    def forward(self, x: Tensor) -> Tensor:
+        
+        # safely shift the logits, we don't want something like e^100 to happen or something
+        # e^big_num probably wouldn't happen, we normalize the data in eda after all
+        # shifting the logits by the max value to prevent overflow
+        # e^-big_num is much more preferred, as it gets rounded to 0
+        # reminder: in softmax we only care about the total of every element to be 1
 
-    def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+        shifted_logit = x.data - np.max(x.data, axis=1, keepdims=True)
+
+        exps = np.exp(shifted_logit)
+
+        self.sum_of_exp = np.sum(exps, axis=1, keepdims=True)
+
+        self.output = exps / self.sum_of_exp
+
+        return Tensor(self.output)
+
+    def backward(self, grad: np.ndarray, lr) -> np.ndarray:
+        
+        # I have no idea whats happening here
+
+        sum_of_grads_dot_output = np.sum(grad * self.output, axis=1, keepdims=True)
+
+        return_grad = self.output * (grad - sum_of_grads_dot_output)
+
+        return return_grad
 
 
 class Model:
