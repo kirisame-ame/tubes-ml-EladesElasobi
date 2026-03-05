@@ -105,13 +105,18 @@ class Sigmoid(Layer):
 
 
 class Tanh(Layer):
-    def forward(self, x):
-        # TODO
-        return super().forward(x)
 
-    def backward(self, grad, lr):
-        # TODO
-        return super().backward(grad, lr)
+    def forward(self, x: Tensor) -> Tensor:
+
+        self.output = np.tanh(x.data)
+        return Tensor(self.output)
+
+    def backward(self, grad: np.ndarray, lr):
+        
+        tanh_deriv = 1.0 - (self.output**2)
+        return_grad = grad * tanh_deriv
+        
+        return return_grad
 
 
 class Softmax(Layer):
