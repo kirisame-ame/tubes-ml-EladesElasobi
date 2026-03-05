@@ -115,13 +115,13 @@ class Relu(Layer):
 
 class Sigmoid(Layer):
     def forward(self, x: Tensor) -> Tensor:
-        
+
         self.output = 1 / (1 + np.exp(-x))
 
         return Tensor(self.output)
 
     def backward(self, grad: np.ndarray, lr) -> np.ndarray:
-        
+
         sigmoid_deriv = self.output * (1 - self.output)
 
         return_grad = grad * sigmoid_deriv
@@ -137,16 +137,16 @@ class Tanh(Layer):
         return Tensor(self.output)
 
     def backward(self, grad: np.ndarray, lr) -> np.ndarray:
-        
+
         tanh_deriv = 1.0 - (self.output**2)
         return_grad = grad * tanh_deriv
-        
+
         return return_grad
 
 
 class Softmax(Layer):
     def forward(self, x: Tensor) -> Tensor:
-        
+
         # safely shift the logits, we don't want something like e^100 to happen or something
         # e^big_num probably wouldn't happen, we normalize the data in eda after all
         # shifting the logits by the max value to prevent overflow
@@ -164,7 +164,7 @@ class Softmax(Layer):
         return Tensor(self.output)
 
     def backward(self, grad: np.ndarray, lr) -> np.ndarray:
-        
+
         # I have no idea whats happening here
 
         sum_of_grads_dot_output = np.sum(grad * self.output, axis=1, keepdims=True)
@@ -188,7 +188,9 @@ class Model:
         for layer in reversed(self.layers):
             grad = layer.backward(grad, lr)
 
-    def fit(self, X, y, epochs=10, batch_size=32, lr=0.01, verbose=1, seed=7):
+    def fit(
+        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, verbose=1, seed=7
+    ):
         n_samples = X.shape[0]
         rng = np.random.default_rng(seed=seed)
         for epoch in range(epochs):
@@ -218,9 +220,9 @@ class Model:
 
     def show_weights(self, layer_idx: list[int]):
         # TODO
-        for layer in self.layers:
+        for layer in self.layers[layer_idx]:
             layer.print_weights()
 
     def show_gradients(self, layer_idx: list[int]):
-        for layer in self.layers:
+        for layer in self.layers[layer_idx]:
             layer.print_gradients()
