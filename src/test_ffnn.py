@@ -2,6 +2,7 @@ from sklearn.preprocessing import PowerTransformer
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn import datasets
+from sklearn.neural_network import MLPClassifier
 import numpy as np
 import ffnn
 
@@ -22,7 +23,11 @@ model = ffnn.Model(
     layers=[ffnn.Linear(4, 4), ffnn.Relu(), ffnn.Linear(4, 3), ffnn.Softmax()],
     loss=ffnn.CrossEntropyLoss(),
 )
-model.fit(X_train_transformed, y_train, epochs=20, lr=1)
+# Initialization Testing
+# ffnn.init.uniform(model.layers[0].weights, -2, 3, 6)
+# ffnn.init.normal(model.layers[2].weights, 0, 3, 6)
+
+model.fit(X_train_transformed, y_train, epochs=100, lr=1, verbose=0)
 preds = model.predict(X_test_transformed)
 
 print(accuracy_score(y_test, preds))
@@ -32,3 +37,15 @@ print("preds:")
 print(preds)
 model.show_weights(range(5))
 model.show_gradients(range(4))
+
+sk = MLPClassifier(
+    hidden_layer_sizes=(4, 3),
+    activation="relu",
+    learning_rate="constant",
+    learning_rate_init=1,
+    max_iter=100,
+)
+sk.fit(X_train_transformed, y_train)
+skpreds = model.predict(X_test_transformed)
+
+print(accuracy_score(y_test, skpreds))
