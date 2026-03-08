@@ -23,11 +23,7 @@ model = ffnn.Model(
     layers=[ffnn.Linear(4, 4), ffnn.Relu(), ffnn.Linear(4, 3), ffnn.Softmax()],
     loss=ffnn.CrossEntropyLoss(),
 )
-# Initialization Testing
-# ffnn.init.uniform(model.layers[0].weights, -2, 3, 6)
-# ffnn.init.normal(model.layers[2].weights, 0, 3, 6)
-
-model.fit(X_train_transformed, y_train, epochs=100, lr=1, verbose=0)
+model.fit(X_train_transformed, y_train, epochs=20, lr=1, penalty="l2", lambda_=0.001)
 preds = model.predict(X_test_transformed)
 
 print(accuracy_score(y_test, preds))
@@ -49,3 +45,8 @@ sk.fit(X_train_transformed, y_train)
 skpreds = model.predict(X_test_transformed)
 
 print(accuracy_score(y_test, skpreds))
+import matplotlib
+
+matplotlib.use("Agg")
+model.plot_weights([0, 2])
+model.plot_gradients([0, 2])
