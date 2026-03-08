@@ -22,7 +22,7 @@ model = ffnn.Model(
     layers=[ffnn.Linear(4, 4), ffnn.Relu(), ffnn.Linear(4, 3), ffnn.Softmax()],
     loss=ffnn.CrossEntropyLoss(),
 )
-model.fit(X_train_transformed, y_train, epochs=20, lr=1)
+model.fit(X_train_transformed, y_train, epochs=20, lr=1, penalty="l2", lambda_=0.001)
 preds = model.predict(X_test_transformed)
 
 print(accuracy_score(y_test, preds))
@@ -32,3 +32,8 @@ print("preds:")
 print(preds)
 model.show_weights(range(5))
 model.show_gradients(range(4))
+
+import matplotlib
+matplotlib.use('Agg')
+model.plot_weights([0, 2])
+model.plot_gradients([0, 2])

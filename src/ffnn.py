@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 
 class Tensor:
@@ -111,10 +112,17 @@ class Linear(Layer):
             y = y + self.bias.data
         return Tensor(y)
 
-    def backward(self, grad, lr):
+    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0):
         dw = grad.T @ self.X.data
         db = np.sum(grad, axis=0)
         dx = grad @ self.weights.data
+
+        # Apply regularization to weight gradients
+        if reg_type == "l1":
+            dw += reg_lambda * np.sign(self.weights.data)
+        elif reg_type == "l2":
+            dw += 2 * reg_lambda * self.weights.data
+
         self.grad = dw
         self.weights.data -= lr * dw
         if self.bias is not None:
@@ -202,12 +210,15 @@ class Model:
             X = layer.forward(X)
         return X
 
-    def backward(self, grad, lr):
+    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0):
         for layer in reversed(self.layers):
-            grad = layer.backward(grad, lr)
+            if isinstance(layer, Linear):
+                grad = layer.backward(grad, lr, reg_type, reg_lambda)
+            else:
+                grad = layer.backward(grad, lr)
 
     def fit(
-        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, verbose=1, seed=7
+        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, lambda_=0.01, verbose=1, seed=7
     ):
         X = np.array(X)
         y = np.array(y)
@@ -226,7 +237,7 @@ class Model:
 
                 # backprop
                 grad = self.loss.get_gradient(y_pred.data, y_batch.data)
-                self.backward(grad, lr)
+                self.backward(grad, lr, reg_type=penalty, reg_lambda=lambda_)
 
             if verbose:
                 print(
@@ -254,3 +265,39 @@ class Model:
                 self.layers[idx].print_gradients()
             except IndexError:
                 print(f"Index {idx} out of range")
+
+    def plot_weights(self, layer_idx: list[int]):
+        linear_layers = [(i, l) for i, l in enumerate(self.layers) if isinstance(l, Linear) and i in layer_idx]
+        if not linear_layers:
+            print("No Linear layers found at the given indices.")
+            return
+        fig, axes = plt.subplots(1, len(linear_layers), figsize=(5 * len(linear_layers), 4))
+        if len(linear_layers) == 1:
+            axes = [axes]
+        for ax, (idx, layer) in zip(axes, linear_layers):
+            w = layer.weights.data.flatten()
+            ax.hist(w, bins=30, edgecolor='black', alpha=0.7)
+            ax.set_title(f"Layer {idx} Weights")
+            ax.set_xlabel("Value")
+            ax.set_ylabel("Frequency")
+        fig.suptitle("Weight Distribution")
+        plt.tight_layout()
+        plt.show()
+
+    def plot_gradients(self, layer_idx: list[int]):
+        linear_layers = [(i, l) for i, l in enumerate(self.layers) if isinstance(l, Linear) and i in layer_idx and hasattr(l, 'grad')]
+        if not linear_layers:
+            print("No Linear layers with gradients found at the given indices.")
+            return
+        fig, axes = plt.subplots(1, len(linear_layers), figsize=(5 * len(linear_layers), 4))
+        if len(linear_layers) == 1:
+            axes = [axes]
+        for ax, (idx, layer) in zip(axes, linear_layers):
+            g = layer.grad.flatten()
+            ax.hist(g, bins=30, edgecolor='black', alpha=0.7, color='orange')
+            ax.set_title(f"Layer {idx} Gradients")
+            ax.set_xlabel("Value")
+            ax.set_ylabel("Frequency")
+        fig.suptitle("Gradient Distribution")
+        plt.tight_layout()
+        plt.show()
