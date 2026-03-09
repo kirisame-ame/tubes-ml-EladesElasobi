@@ -3,6 +3,7 @@ import random
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import joblib
 
 
 class Tensor:
@@ -301,3 +302,33 @@ class Model:
         fig.suptitle("Gradient Distribution")
         plt.tight_layout()
         plt.show()
+    
+    def save_model(self, output_filename: str):
+        '''
+        IMPORTANT!
+        in order for python to recognize the model, one of the following requirement must be fulfilled:
+        - Import the model in the notebook
+        - Load the model (in the notebook) within the same directory of the class model
+        - Use sys.path to the class model's directory
+
+        example on loading the model and using it:
+        try:
+            # Load the bundle
+            bundle = joblib.load(filename)
+            
+            # Get the model and scaler
+            model = bundle["model"]
+
+            # some other preproc code
+
+            # usage example (just call the class' function)
+            preds = model.predict(X_transformed)
+
+        except FileNotFoundError:
+            print(f"Error: File '{filename}' not found.")
+            print("Run: python decision_tree.py -out_model my_model.joblib")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        '''
+        bundle = {"model": self}
+        joblib.dump(bundle,output_filename)
