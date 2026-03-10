@@ -72,12 +72,16 @@ class init:
 
     @staticmethod
     def kaiming_uniform(tensor: Tensor):
-        # TODO
-        pass
+        fan_in = tensor.data.shape[1] if tensor.data.ndim > 1 else tensor.data.shape[0]
+        bound = math.sqrt(6.0 / fan_in)
+        tensor.data[:] = np.random.uniform(-bound, bound, tensor.dim())
 
     @staticmethod
     def xavier_uniform(tensor: Tensor):
-        pass
+        fan_in = tensor.data.shape[1] if tensor.data.ndim > 1 else tensor.data.shape[0]
+        fan_out = tensor.data.shape[0] if tensor.data.ndim > 1 else tensor.data.shape[0]
+        bound = math.sqrt(6.0 / (fan_in + fan_out))
+        tensor.data[:] = np.random.uniform(-bound, bound, tensor.dim())
 
 
 class Layer:
@@ -104,7 +108,9 @@ class Linear(Layer):
         self.out_features = out_features
         self.weights = Tensor(np.empty((out_features, in_features)))
         self.bias = Tensor(np.empty(out_features)) if bias else None
-        init.zeros(self.weights)
+        init.xavier_uniform(self.weights)
+        if self.bias is not None:
+            init.zeros(self.bias)
 
     def forward(self, x):
         self.X = x
@@ -218,13 +224,28 @@ class Model:
             else:
                 grad = layer.backward(grad, lr)
 
+    def _compute_reg_loss(self, penalty, lambda_):
+        reg_loss = 0.0
+        if penalty is None:
+            return reg_loss
+        for layer in self.layers:
+            if isinstance(layer, Linear):
+                if penalty == "l1":
+                    reg_loss += lambda_ * np.sum(np.abs(layer.weights.data))
+                elif penalty == "l2":
+                    reg_loss += lambda_ * np.sum(layer.weights.data ** 2)
+        return reg_loss
+
     def fit(
-        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, lambda_=0.01, verbose=1, seed=7
+        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, lambda_=0.01, verbose=1, seed=7, validation_data=None
     ):
         X = np.array(X)
         y = np.array(y)
         n_samples = X.shape[0]
         rng = np.random.default_rng(seed=seed)
+
+        history = {"train_loss": [], "val_loss": []}
+
         for epoch in range(epochs):
             indices = np.arange(n_samples)
             rng.shuffle(indices)
@@ -240,10 +261,26 @@ class Model:
                 grad = self.loss.get_gradient(y_pred.data, y_batch.data)
                 self.backward(grad, lr, reg_type=penalty, reg_lambda=lambda_)
 
+            # compute full training loss
+            train_pred = self.forward(Tensor(X))
+            train_loss = self.loss.get_loss(train_pred.data, y) + self._compute_reg_loss(penalty, lambda_)
+            history["train_loss"].append(train_loss)
+
+            # compute validation loss
+            if validation_data is not None:
+                X_val, y_val = validation_data
+                X_val, y_val = np.array(X_val), np.array(y_val)
+                val_pred = self.forward(Tensor(X_val))
+                val_loss = self.loss.get_loss(val_pred.data, y_val) + self._compute_reg_loss(penalty, lambda_)
+                history["val_loss"].append(val_loss)
+
             if verbose:
-                print(
-                    f"Epoch {epoch+1}, Loss: {self.loss.get_loss(y_pred.data,y_batch.data):.6f}"
-                )
+                msg = f"Epoch {epoch+1}, Train Loss: {train_loss:.6f}"
+                if validation_data is not None:
+                    msg += f", Val Loss: {history['val_loss'][-1]:.6f}"
+                print(msg)
+
+        return history
 
     def predict(self, X):
         X_tensor = Tensor(X)
