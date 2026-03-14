@@ -1,4 +1,5 @@
 import random
+import sys
 
 import numpy as np
 import math
@@ -23,22 +24,21 @@ class loss:
 
 
 class MSE(loss):
-    # def _to_one_hot(self, input, target):
-    #     if target.ndim == 1 or (target.ndim == 2 and target.shape[1] == 1):
-    #         one_hot = np.zeros((target.shape[0], input.shape[1]))
-    #         one_hot[np.arange(target.shape[0]), target.flatten().astype(int)] = 1
-    #         return one_hot
-    #     return target
-
     def get_loss(self, input, target):
-        pass
-        # target = self._to_one_hot(input, target)
-        # return np.mean((input - target) ** 2)
+        return np.mean((input - target) ** 2)
 
     def get_gradient(self, input, target):
-        pass
-        # target = self._to_one_hot(input, target)
-        # return 2 * (input - target) / input.shape[0]
+        return 2 * (input - target) / input.shape[0]
+
+
+class BinaryCrossEntropyLoss(loss):
+    def get_loss(self, input, target):
+        input = np.clip(input, 1e-9, 1 - 1e-9)
+        return -np.mean(target * np.log(input) + (1 - target) * np.log(1 - input))
+
+    def get_gradient(self, input, target):
+        input = np.clip(input, 1e-9, 1 - 1e-9)
+        return (input - target) / (input * (1 - input) * input.shape[0])
 
 
 class CrossEntropyLoss(loss):
@@ -217,7 +217,7 @@ class Relu(Layer):
 class Sigmoid(Layer):
     def forward(self, x: Tensor) -> Tensor:
 
-        self.output = 1 / (1 + np.exp(-x))
+        self.output = 1 / (1 + np.exp(-x.data))
 
         return Tensor(self.output)
 
@@ -273,6 +273,15 @@ class Softmax(Layer):
         return_grad = self.output * (grad - sum_of_grads_dot_output)
 
         return return_grad
+
+
+class LinearActivation(Layer):
+    def forward(self, x: Tensor) -> Tensor:
+        self.X = x
+        return Tensor(x.data.copy())
+
+    def backward(self, grad, lr):
+        return grad
 
 
 class RMSNorm(Layer):
@@ -364,7 +373,8 @@ class Model:
         for epoch in range(epochs):
             indices = np.arange(n_samples)
             rng.shuffle(indices)
-            for start in range(0, n_samples, batch_size):
+            n_batches = math.ceil(n_samples / batch_size)
+            for batch_i, start in enumerate(range(0, n_samples, batch_size)):
                 end = start + batch_size
                 batch_idx = indices[start:end]
                 X_batch = Tensor(X[batch_idx])
@@ -384,6 +394,15 @@ class Model:
                 )
                 t += 1
 
+                # progress bar within epoch
+                if verbose == 1:
+                    done = batch_i + 1
+                    bar_len = 30
+                    filled = int(bar_len * done / n_batches)
+                    bar = "=" * filled + "." * (bar_len - filled)
+                    sys.stdout.write(f"\rEpoch {epoch+1}/{epochs} [{bar}] {done}/{n_batches}")
+                    sys.stdout.flush()
+
             # compute full training loss
             train_pred = self.forward(Tensor(X))
             train_loss = self.loss.get_loss(
@@ -401,10 +420,10 @@ class Model:
                 ) + self._compute_reg_loss(penalty, lambda_)
                 history["val_loss"].append(val_loss)
 
-            if verbose:
-                msg = f"Epoch {epoch+1}, Train Loss: {train_loss:.6f}"
+            if verbose == 1:
+                msg = f"\rEpoch {epoch+1}/{epochs} [{bar}] - train_loss: {train_loss:.6f}"
                 if validation_data is not None:
-                    msg += f", Val Loss: {history['val_loss'][-1]:.6f}"
+                    msg += f" - val_loss: {history['val_loss'][-1]:.6f}"
                 print(msg)
 
         return history
@@ -508,3 +527,8 @@ class Model:
         """
         bundle = {"model": self}
         joblib.dump(bundle, output_filename)
+
+    @staticmethod
+    def load_model(filename: str):
+        bundle = joblib.load(filename)
+        return bundle["model"]
