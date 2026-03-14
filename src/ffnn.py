@@ -158,8 +158,9 @@ class Layer:
         # else print nothing
 
     def print_gradients(self):
-        if hasattr(self, "grad"):
-            print(self.grad)
+        dw = getattr(self, "dw", None)
+        if dw is not None:
+            print(dw)
         # else print nothing
 
 
@@ -169,6 +170,8 @@ class Linear(Layer):
         self.out_features = out_features
         self.weights = Tensor(np.empty((out_features, in_features)))
         self.bias = Tensor(np.empty(out_features)) if bias else None
+        self.dw = None  # gradient w.r.t. weights, populated during backward()
+        self.db = None  # gradient w.r.t. bias, populated during backward()
         init.xavier_uniform(self.weights)
         if self.bias is not None:
             init.zeros(self.bias)
@@ -458,21 +461,41 @@ class Model:
         return np.argmax(out.data, axis=1)
 
     def show_weights(self, layer_idx: list[int]):
-        # TODO
         for idx in layer_idx:
-            print(f"Layer {idx} Weights:")
-            try:
-                self.layers[idx].print_weights()
-            except IndexError:
+            if idx >= len(self.layers):
                 print(f"Warning: Index {idx} out of range")
+                continue
+            layer = self.layers[idx]
+            if not isinstance(layer, Linear):
+                print(f"Layer {idx} is not a Linear layer, skipping.")
+                continue
+            w = layer.weights.data
+            print(f"Layer {idx} Weights (shape={w.shape}):")
+            print(w)
+            if layer.bias is not None:
+                b = layer.bias.data
+                print(f"Layer {idx} Bias (shape={b.shape}):")
+                print(b)
 
     def show_gradients(self, layer_idx: list[int]):
         for idx in layer_idx:
-            print(f"Layer {idx} Gradients:")
-            try:
-                self.layers[idx].print_gradients()
-            except IndexError:
-                print(f"Index {idx} out of range")
+            if idx >= len(self.layers):
+                print(f"Warning: Index {idx} out of range")
+                continue
+            layer = self.layers[idx]
+            if not isinstance(layer, Linear):
+                print(f"Layer {idx} is not a Linear layer, skipping.")
+                continue
+            dw = layer.dw
+            db = layer.db
+            if dw is None:
+                print(f"Layer {idx}: gradients not yet computed (run fit first).")
+                continue
+            print(f"Layer {idx} Weight Gradients (shape={dw.shape}):")
+            print(dw)
+            if db is not None:
+                print(f"Layer {idx} Bias Gradients (shape={db.shape}):")
+                print(db)
 
     def plot_weights(self, layer_idx: list[int]):
         linear_layers = [
@@ -502,10 +525,10 @@ class Model:
         linear_layers = [
             (i, l)
             for i, l in enumerate(self.layers)
-            if isinstance(l, Linear) and i in layer_idx and hasattr(l, "grad")
+            if isinstance(l, Linear) and i in layer_idx and l.dw is not None
         ]
         if not linear_layers:
-            print("No Linear layers with gradients found at the given indices.")
+            print("No Linear layers with gradients found. Run fit() first.")
             return
         fig, axes = plt.subplots(
             1, len(linear_layers), figsize=(5 * len(linear_layers), 4)
@@ -513,7 +536,7 @@ class Model:
         if len(linear_layers) == 1:
             axes = [axes]
         for ax, (idx, layer) in zip(axes, linear_layers):
-            g = layer.grad.flatten()
+            g = layer.dw.flatten()
             ax.hist(g, bins=30, edgecolor="black", alpha=0.7, color="orange")
             ax.set_title(f"Layer {idx} Gradients")
             ax.set_xlabel("Value")
