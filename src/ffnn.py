@@ -292,8 +292,6 @@ class Softmax(Layer):
 
     def backward(self, grad: np.ndarray, lr) -> np.ndarray:
 
-        # I have no idea whats happening here
-
         sum_of_grads_dot_output = np.sum(grad * self.output, axis=1, keepdims=True)
 
         return_grad = self.output * (grad - sum_of_grads_dot_output)
