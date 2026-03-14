@@ -25,7 +25,7 @@ model = ffnn.Model(
     layers=[ffnn.Linear(4, 4), ffnn.Relu(), ffnn.Linear(4, 3), ffnn.Softmax()],
     loss=ffnn.CrossEntropyLoss(),
 )
-model.fit(X_train_transformed, y_train, epochs=20, lr=0.01, penalty="l2", lambda_=0.001)
+model.fit(X_train_transformed, y_train, epochs=30, lr=0.01, penalty="l2", lambda_=0.001)
 preds = model.predict(X_test_transformed)
 
 print("Accuracy:", accuracy_score(y_test, preds))
@@ -41,7 +41,7 @@ model_kaiming = ffnn.Model(
     loss=ffnn.CrossEntropyLoss(),
 )
 model_kaiming.fit(
-    X_train_transformed, y_train, epochs=20, lr=0.01, penalty="l2", lambda_=0.001
+    X_train_transformed, y_train, epochs=30, lr=0.01, penalty="l2", lambda_=0.001
 )
 preds_kaiming = model_kaiming.predict(X_test_transformed)
 
@@ -56,7 +56,7 @@ opt = ffnn.Adam()
 model_adam.fit(
     X_train_transformed,
     y_train,
-    epochs=20,
+    epochs=30,
     lr=0.01,
     optimizer=opt,
     penalty="l2",
@@ -66,13 +66,37 @@ preds_adam = model_adam.predict(X_test_transformed)
 
 print("Accuracy:", accuracy_score(y_test, preds_adam))
 
+print("\n--- Test 4: RMSNorm ---")
+model_norm = ffnn.Model(
+    layers=[
+        ffnn.RMSNorm(4),
+        ffnn.Linear(4, 4),
+        ffnn.RMSNorm(4),
+        ffnn.Relu(),
+        ffnn.Linear(4, 3),
+        ffnn.RMSNorm(3),
+        ffnn.Softmax(),
+    ],
+    loss=ffnn.CrossEntropyLoss(),
+)
+model_norm.fit(
+    X_train_transformed,
+    y_train,
+    epochs=30,
+    lr=0.01,
+    penalty="l2",
+    lambda_=0.001,
+)
+preds_norm = model_norm.predict(X_test_transformed)
+
+print("Accuracy:", accuracy_score(y_test, preds_norm))
 
 sk = MLPClassifier(
     hidden_layer_sizes=(4, 3),
     activation="relu",
     learning_rate="constant",
     learning_rate_init=0.1,
-    max_iter=20,
+    max_iter=30,
 )
 sk.fit(X_train_transformed, y_train)
 skpreds = sk.predict(X_test_transformed)

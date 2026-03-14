@@ -275,6 +275,39 @@ class Softmax(Layer):
         return return_grad
 
 
+class RMSNorm(Layer):
+    def __init__(self, in_features, eps=1e-8):
+        self.in_features = in_features
+        self.eps = eps
+        self.weights = Tensor(np.ones((in_features)))
+        self.bias = None  # placeholder to prevent breaking optimizers
+        self.dw = None
+        self.db = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        self.X = x.data
+        self.rms = np.sqrt(np.mean(self.X**2, axis=-1, keepdims=True) + self.eps)
+        self.x_norm = self.X / self.rms
+        return Tensor(self.weights.data * self.x_norm)
+
+    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0, optimizer=None, t=1):
+        dx_norm = grad * self.weights.data
+        self.dw = np.sum(grad * self.x_norm, axis=0)
+        self.db = None
+
+        D = self.X.shape[-1]
+        dx = (dx_norm / self.rms) - (self.X / (D * self.rms**3)) * np.sum(
+            dx_norm * self.X, axis=-1, keepdims=True
+        )
+
+        if optimizer is not None:
+            optimizer.update(self, t)
+        else:
+            self.weights.data -= lr * self.dw
+
+        return dx
+
+
 class Model:
     def __init__(self, layers: list[Layer], loss: loss):
         self.layers = layers
@@ -287,7 +320,7 @@ class Model:
 
     def backward(self, grad, lr, reg_type=None, reg_lambda=0.0, optimizer=None, t=1):
         for layer in reversed(self.layers):
-            if isinstance(layer, Linear):
+            if isinstance(layer, (Linear, RMSNorm)):
                 grad = layer.backward(grad, lr, reg_type, reg_lambda, optimizer, t)
             else:
                 grad = layer.backward(grad, lr)
