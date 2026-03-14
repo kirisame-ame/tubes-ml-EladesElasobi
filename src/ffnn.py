@@ -84,6 +84,67 @@ class init:
         tensor.data[:] = np.random.uniform(-bound, bound, tensor.dim())
 
 
+class Optimizer:
+    def __init__(self, lr=0.01):
+        self.lr = lr
+
+    def update(self, layer, t):
+        raise NotImplementedError
+
+
+class SGD(Optimizer):
+    def update(self, layer, t):
+        layer.weights.data -= self.lr * layer.dw
+        if layer.bias is not None and layer.db is not None:
+            layer.bias.data -= self.lr * layer.db
+
+
+class Adam(Optimizer):
+    def __init__(self, lr=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8):
+        super().__init__(lr)
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        self.m_w = {}
+        self.v_w = {}
+        self.m_b = {}
+        self.v_b = {}
+
+    def update(self, layer, t):
+        layer_id = id(layer)
+        if layer_id not in self.m_w:
+            self.m_w[layer_id] = np.zeros_like(layer.weights.data)
+            self.v_w[layer_id] = np.zeros_like(layer.weights.data)
+            if layer.bias is not None:
+                self.m_b[layer_id] = np.zeros_like(layer.bias.data)
+                self.v_b[layer_id] = np.zeros_like(layer.bias.data)
+
+        self.m_w[layer_id] = (
+            self.beta1 * self.m_w[layer_id] + (1 - self.beta1) * layer.dw
+        )
+        self.v_w[layer_id] = self.beta2 * self.v_w[layer_id] + (1 - self.beta2) * (
+            layer.dw**2
+        )
+
+        m_w_hat = self.m_w[layer_id] / (1 - self.beta1**t)
+        v_w_hat = self.v_w[layer_id] / (1 - self.beta2**t)
+
+        layer.weights.data -= self.lr * m_w_hat / (np.sqrt(v_w_hat) + self.epsilon)
+
+        if layer.bias is not None and layer.db is not None:
+            self.m_b[layer_id] = (
+                self.beta1 * self.m_b[layer_id] + (1 - self.beta1) * layer.db
+            )
+            self.v_b[layer_id] = self.beta2 * self.v_b[layer_id] + (1 - self.beta2) * (
+                layer.db**2
+            )
+
+            m_b_hat = self.m_b[layer_id] / (1 - self.beta1**t)
+            v_b_hat = self.v_b[layer_id] / (1 - self.beta2**t)
+
+            layer.bias.data -= self.lr * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
+
+
 class Layer:
     def forward(self, x: Tensor):
         raise NotImplementedError
@@ -119,9 +180,9 @@ class Linear(Layer):
             y = y + self.bias.data
         return Tensor(y)
 
-    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0):
+    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0, optimizer=None, t=1):
         dw = grad.T @ self.X.data
-        db = np.sum(grad, axis=0)
+        db = np.sum(grad, axis=0) if self.bias is not None else None
         dx = grad @ self.weights.data
 
         # Apply regularization to weight gradients
@@ -131,9 +192,16 @@ class Linear(Layer):
             dw += 2 * reg_lambda * self.weights.data
 
         self.grad = dw
-        self.weights.data -= lr * dw
-        if self.bias is not None:
-            self.bias.data -= lr * db
+        self.dw = dw
+        self.db = db
+
+        if optimizer is not None:
+            optimizer.update(self, t)
+        else:
+            self.weights.data -= lr * dw
+            if self.bias is not None and db is not None:
+                self.bias.data -= lr * db
+
         return dx
 
 
@@ -217,10 +285,10 @@ class Model:
             X = layer.forward(X)
         return X
 
-    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0):
+    def backward(self, grad, lr, reg_type=None, reg_lambda=0.0, optimizer=None, t=1):
         for layer in reversed(self.layers):
             if isinstance(layer, Linear):
-                grad = layer.backward(grad, lr, reg_type, reg_lambda)
+                grad = layer.backward(grad, lr, reg_type, reg_lambda, optimizer, t)
             else:
                 grad = layer.backward(grad, lr)
 
@@ -233,19 +301,33 @@ class Model:
                 if penalty == "l1":
                     reg_loss += lambda_ * np.sum(np.abs(layer.weights.data))
                 elif penalty == "l2":
-                    reg_loss += lambda_ * np.sum(layer.weights.data ** 2)
+                    reg_loss += lambda_ * np.sum(layer.weights.data**2)
         return reg_loss
 
     def fit(
-        self, X, y, epochs=10, batch_size=32, lr=0.01, penalty=None, lambda_=0.01, verbose=1, seed=7, validation_data=None
+        self,
+        X,
+        y,
+        epochs=10,
+        batch_size=32,
+        lr=0.01,
+        penalty=None,
+        lambda_=0.01,
+        optimizer=None,
+        verbose=1,
+        seed=7,
+        validation_data=None,
     ):
         X = np.array(X)
         y = np.array(y)
         n_samples = X.shape[0]
         rng = np.random.default_rng(seed=seed)
 
+        self.optimizer = optimizer
+
         history = {"train_loss": [], "val_loss": []}
 
+        t = 1
         for epoch in range(epochs):
             indices = np.arange(n_samples)
             rng.shuffle(indices)
@@ -259,11 +341,21 @@ class Model:
 
                 # backprop
                 grad = self.loss.get_gradient(y_pred.data, y_batch.data)
-                self.backward(grad, lr, reg_type=penalty, reg_lambda=lambda_)
+                self.backward(
+                    grad,
+                    lr,
+                    reg_type=penalty,
+                    reg_lambda=lambda_,
+                    optimizer=self.optimizer,
+                    t=t,
+                )
+                t += 1
 
             # compute full training loss
             train_pred = self.forward(Tensor(X))
-            train_loss = self.loss.get_loss(train_pred.data, y) + self._compute_reg_loss(penalty, lambda_)
+            train_loss = self.loss.get_loss(
+                train_pred.data, y
+            ) + self._compute_reg_loss(penalty, lambda_)
             history["train_loss"].append(train_loss)
 
             # compute validation loss
@@ -271,7 +363,9 @@ class Model:
                 X_val, y_val = validation_data
                 X_val, y_val = np.array(X_val), np.array(y_val)
                 val_pred = self.forward(Tensor(X_val))
-                val_loss = self.loss.get_loss(val_pred.data, y_val) + self._compute_reg_loss(penalty, lambda_)
+                val_loss = self.loss.get_loss(
+                    val_pred.data, y_val
+                ) + self._compute_reg_loss(penalty, lambda_)
                 history["val_loss"].append(val_loss)
 
             if verbose:
@@ -305,16 +399,22 @@ class Model:
                 print(f"Index {idx} out of range")
 
     def plot_weights(self, layer_idx: list[int]):
-        linear_layers = [(i, l) for i, l in enumerate(self.layers) if isinstance(l, Linear) and i in layer_idx]
+        linear_layers = [
+            (i, l)
+            for i, l in enumerate(self.layers)
+            if isinstance(l, Linear) and i in layer_idx
+        ]
         if not linear_layers:
             print("No Linear layers found at the given indices.")
             return
-        fig, axes = plt.subplots(1, len(linear_layers), figsize=(5 * len(linear_layers), 4))
+        fig, axes = plt.subplots(
+            1, len(linear_layers), figsize=(5 * len(linear_layers), 4)
+        )
         if len(linear_layers) == 1:
             axes = [axes]
         for ax, (idx, layer) in zip(axes, linear_layers):
             w = layer.weights.data.flatten()
-            ax.hist(w, bins=30, edgecolor='black', alpha=0.7)
+            ax.hist(w, bins=30, edgecolor="black", alpha=0.7)
             ax.set_title(f"Layer {idx} Weights")
             ax.set_xlabel("Value")
             ax.set_ylabel("Frequency")
@@ -323,25 +423,31 @@ class Model:
         plt.show()
 
     def plot_gradients(self, layer_idx: list[int]):
-        linear_layers = [(i, l) for i, l in enumerate(self.layers) if isinstance(l, Linear) and i in layer_idx and hasattr(l, 'grad')]
+        linear_layers = [
+            (i, l)
+            for i, l in enumerate(self.layers)
+            if isinstance(l, Linear) and i in layer_idx and hasattr(l, "grad")
+        ]
         if not linear_layers:
             print("No Linear layers with gradients found at the given indices.")
             return
-        fig, axes = plt.subplots(1, len(linear_layers), figsize=(5 * len(linear_layers), 4))
+        fig, axes = plt.subplots(
+            1, len(linear_layers), figsize=(5 * len(linear_layers), 4)
+        )
         if len(linear_layers) == 1:
             axes = [axes]
         for ax, (idx, layer) in zip(axes, linear_layers):
             g = layer.grad.flatten()
-            ax.hist(g, bins=30, edgecolor='black', alpha=0.7, color='orange')
+            ax.hist(g, bins=30, edgecolor="black", alpha=0.7, color="orange")
             ax.set_title(f"Layer {idx} Gradients")
             ax.set_xlabel("Value")
             ax.set_ylabel("Frequency")
         fig.suptitle("Gradient Distribution")
         plt.tight_layout()
         plt.show()
-    
+
     def save_model(self, output_filename: str):
-        '''
+        """
         IMPORTANT!
         in order for python to recognize the model, one of the following requirement must be fulfilled:
         - Import the model in the notebook
@@ -352,7 +458,7 @@ class Model:
         try:
             # Load the bundle
             bundle = joblib.load(filename)
-            
+
             # Get the model and scaler
             model = bundle["model"]
 
@@ -366,6 +472,6 @@ class Model:
             print("Run: python decision_tree.py -out_model my_model.joblib")
         except Exception as e:
             print(f"An error occurred: {e}")
-        '''
+        """
         bundle = {"model": self}
-        joblib.dump(bundle,output_filename)
+        joblib.dump(bundle, output_filename)
