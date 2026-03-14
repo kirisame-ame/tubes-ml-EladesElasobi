@@ -28,7 +28,7 @@ class MSE(loss):
         return np.mean((input - target) ** 2)
 
     def get_gradient(self, input, target):
-        return 2 * (input - target) / input.shape[0]
+        return 2 * (input - target) / input.size
 
 
 class BinaryCrossEntropyLoss(loss):
@@ -212,6 +212,32 @@ class Relu(Layer):
 
     def backward(self, grad, lr):
         return grad * self.mask
+
+
+class LeakyRelu(Layer):
+    def __init__(self, alpha=0.01):
+        self.alpha = alpha
+
+    def forward(self, x):
+        self.mask = np.where(x.data > 0, 1.0, self.alpha)
+        return Tensor(x.data * self.mask)
+
+    def backward(self, grad, lr):
+        return grad * self.mask
+
+
+class ELU(Layer):
+    def __init__(self, alpha=1.0):
+        self.alpha = alpha
+
+    def forward(self, x):
+        self.input = x.data
+        out = np.where(x.data > 0, x.data, self.alpha * (np.exp(x.data) - 1))
+        return Tensor(out)
+
+    def backward(self, grad, lr):
+        dx = np.where(self.input > 0, 1.0, self.alpha * np.exp(self.input))
+        return grad * dx
 
 
 class Sigmoid(Layer):
